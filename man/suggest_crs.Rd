@@ -4,7 +4,14 @@
 \alias{suggest_crs}
 \title{Suggest coordinate systems for an input spatial dataset}
 \usage{
-suggest_crs(input, type = "projected", limit = 10, gcs = NULL, units = NULL)
+suggest_crs(
+  input,
+  type = "projected",
+  limit = 10,
+  gcs = NULL,
+  units = NULL,
+  drop_na = TRUE
+)
 }
 \arguments{
 \item{input}{A spatial dataset of class \code{"sf"}, \code{"Spatial*"}, or
@@ -17,6 +24,8 @@ suggest_crs(input, type = "projected", limit = 10, gcs = NULL, units = NULL)
 \item{gcs}{(optional) The EPSG code for the corresponding geographic coordinate system of the results (e.g. \code{4326} for WGS 1984).}
 
 \item{units}{(optional) The measurement units of the coordinate systems in the returned results.  Can be one of \code{"m"}, \code{"ft"}, or \code{"ft-us"}.}
+
+\item{drop_na}{Whether or not to drop EPSG codes that do not appear in the PROJ database (and thus can't be used for CRS transformation). Defauts to \code{TRUE}; set to \code{FALSE} if you want to search all codes.}
 }
 \value{
 A data frame with information about coordinate reference systems that could be suitably used for CRS transformation.
@@ -26,7 +35,7 @@ This function takes an input spatial dataset as input and makes "suggestions" fo
 coordinate reference systems that could be used for CRS transformations in spatial analysis
 projects.  The function works by analyzing the extent of the spatial dataset and comparing it
 to the area extents in the EPSG's coordinate reference system database.  The "suggested"
-coordinate reference systems are determined by minimizing the Haussdorf distances between
+coordinate reference systems are determined by minimizing the Hausdorff distances between
 the CRS area extents and the input dataset, subject to user preferences (such as
 a geographic coordinate system ID or measurement units).
 }
