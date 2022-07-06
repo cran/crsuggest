@@ -4,10 +4,12 @@
 \alias{guess_crs}
 \title{Guess the CRS of a dataset that is missing CRS information}
 \usage{
-guess_crs(input_sf, target_location, units = NULL, n_return = 10)
+guess_crs(input, target_location, units = NULL, n_return = 10, input_sf = NULL)
 }
 \arguments{
-\item{input_sf}{An input sf object in a projected coordinate system that is
+\item{input}{A spatial dataset of class \code{"sf"}, \code{"Spatial*"},
+\code{"RasterLayer"}, \code{"SpatVector"}, or \code{"SpatRaster"}
+in a projected coordinate reference system that is
 missing CRS information. For example, you may have loaded in a shapefile without
 a .prj file, or your input data has no CRS definition attached.}
 
@@ -25,6 +27,8 @@ the guesses more accurate.}
 number than that may include CRS options that are unlikely to work with
 your data. Use the returned \code{dist_km} column to judge whether the CRS
 guess makes sense for your data.}
+
+\item{input_sf}{Deprecated; use \code{input} instead.}
 }
 \value{
 A tibble of CRS guesses for your data, sorted in ascending order of distance between
@@ -32,7 +36,8 @@ A tibble of CRS guesses for your data, sorted in ascending order of distance bet
 }
 \description{
 This function will "guess" possible coordinate reference systems for spatial data that are
-lacking a CRS definition.  Input data, which must be of class \code{"sf"}, might be objects
+lacking a CRS definition.  Input data, which must be of class \code{"sf"}
+(or which can be converted to sf) might be objects
 created from CSV files that use projected coordinates or objects created from shapefiles
 loaded with \code{sf::st_read()} that are missing .prj files.  The function requires a
 "target location" that the user knows to be within the general area of the input dataset.  It

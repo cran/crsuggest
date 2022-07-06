@@ -1,7 +1,8 @@
 #' Guess the CRS of a dataset that is missing CRS information
 #'
 #' This function will "guess" possible coordinate reference systems for spatial data that are
-#' lacking a CRS definition.  Input data, which must be of class \code{"sf"}, might be objects
+#' lacking a CRS definition.  Input data, which must be of class \code{"sf"}
+#' (or which can be converted to sf) might be objects
 #' created from CSV files that use projected coordinates or objects created from shapefiles
 #' loaded with \code{sf::st_read()} that are missing .prj files.  The function requires a
 #' "target location" that the user knows to be within the general area of the input dataset.  It
@@ -11,7 +12,9 @@
 #' short distances represent better guesses for the CRS whereas longer distances suggest that
 #' the CRS wouldn't work.
 #'
-#' @param input_sf An input sf object in a projected coordinate system that is
+#' @param input A spatial dataset of class \code{"sf"}, \code{"Spatial*"},
+#'                 \code{"RasterLayer"}, \code{"SpatVector"}, or \code{"SpatRaster"}
+#'                 in a projected coordinate reference system that is
 #'                 missing CRS information. For example, you may have loaded in a shapefile without
 #'                 a .prj file, or your input data has no CRS definition attached.
 #' @param target_location A coordinate pair of form \code{c(longitude, latitude)}
@@ -26,6 +29,7 @@
 #'                 number than that may include CRS options that are unlikely to work with
 #'                 your data. Use the returned \code{dist_km} column to judge whether the CRS
 #'                 guess makes sense for your data.
+#' @param input_sf Deprecated; use \code{input} instead.
 #'
 #' @return A tibble of CRS guesses for your data, sorted in ascending order of distance between
 #'         your target location and the input sf object's centroid when in that CRS.
@@ -55,14 +59,22 @@
 #' # Set the CRS of your data with the "best guess"
 #' st_crs(locations_sf) <- 6584
 #' }
-guess_crs <- function(input_sf, target_location, units = NULL,
-                      n_return = 10) {
+guess_crs <- function(input, target_location, units = NULL,
+                      n_return = 10, input_sf = NULL) {
+
+  # Note that the `input_sf` argument is deprecated
+  if (!is.null(input_sf)) {
+    stop("The `input_sf` argument has been renamed to `input`, please adjust your code accordingly and re-run.", call. = FALSE)
+  }
 
   # If the data already has a CRS, you don't need this function!
-  if (!is.na(sf::st_crs(input_sf)$epsg)) {
+  if (!is.na(sf::st_crs(input)$epsg)) {
     stop("Your data already has a CRS set; perhaps you want `crsuggest::suggest_crs()` instead.",
          call. = FALSE)
   }
+
+  # Store the original input for later
+  original_input <- input
 
   # If mapboxapi is installed, geocode the address
   if (is.character(target_location)) {
@@ -94,8 +106,28 @@ guess_crs <- function(input_sf, target_location, units = NULL,
   crs_options <- crsuggest::suggest_crs(target_sf, limit = 50, units = units) %>%
     dplyr::filter(!is.na(crs_units))
 
+  # If the input object is not sf but of another spatial class, convert it
+  # If the input is a raster layer or a terra object, convert to a polygon at the
+  # extent of that layer
+  if (inherits(input, "RasterLayer") || inherits(input, "SpatRaster") || inherits(input, "SpatVector")) {
+
+    input <- input %>%
+      st_bbox() %>%
+      st_as_sfc()
+  }
+
+  # If object is from the sp package, convert to sf
+  if (any(grepl("Spatial", class(input)))) {
+    input <- st_as_sf(input)
+  }
+
+  # If it is a simple feature collection, make into sf
+  if (inherits(input, "sfc")) {
+    input <- st_sf(input)
+  }
+
   # We now need to get the centroid of the input sf object with no CRS
-  no_crs_centroid <- suppressMessages(suppressWarnings(st_centroid(st_union(input_sf))))
+  no_crs_centroid <- suppressMessages(suppressWarnings(st_centroid(st_union(input))))
 
   # We now iterate through the suggested CRS options and see if they work
   # To do this, calculate the distance between the target sf and the centroid,
@@ -118,7 +150,17 @@ guess_crs <- function(input_sf, target_location, units = NULL,
 
   top_crs <- dist_df$crs_code[1]
 
-  message(sprintf("The 'best guess' for the CRS of your data is EPSG code %s.\nUse `sf::st_crs(your_data) <- %s` to use this CRS for your data.\nView the returned dataset for other possible options.", top_crs, top_crs))
+  # Give an informative message based on the original type
+  if (inherits(original_input, "sf") || inherits(original_input, "sfc")) {
+    message(sprintf("The 'best guess' for the CRS of your data is EPSG code %s.\nUse `sf::st_crs(your_data) <- %s` to use this CRS for your data.\nView the returned dataset for other possible options.", top_crs, top_crs))
+  } else if (inherits(original_input, "SpatRaster") || inherits(original_input, "SpatVector")) {
+    message(sprintf("The 'best guess' for the CRS of your data is EPSG code %s.\nUse `terra::crs(your_data) <- 'EPSG:%s'` to use this CRS for your data.\nView the returned dataset for other possible options.", top_crs, top_crs))
+  } else if (any(grepl("Spatial", class(original_input)))) {
+    message(sprintf("The 'best guess' for the CRS of your data is EPSG code %s.\nUse `proj4string(your_data) <- 'CRS('+init=epsg:%s')` to use this CRS for your data.\nView the returned dataset for other possible options.", top_crs, top_crs))
+  } else if (inherits(original_input, "RasterLayer")) {
+    message(sprintf("The 'best guess' for the CRS of your data is EPSG code %s.\nUse `raster::crs(your_data) <- %s` to use this CRS for your data.\nView the returned dataset for other possible options.", top_crs, top_crs))
+  }
+
 
   return(dist_df)
 
